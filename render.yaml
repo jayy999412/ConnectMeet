@@ -1,0 +1,63 @@
+# ---------------------------------------------------------------------------
+# ConnectMeet — Render blueprint
+#
+# Deploy the Flask API as a Render Web Service.
+#
+#   1. Push this repo to GitHub.
+#   2. Render dashboard -> New -> Blueprint -> select the repo.
+#   3. Render reads this file and creates the API service.
+#   4. Set the environment variables marked `sync: false` in the Render UI.
+#
+# IMPORTANT: this blueprint provisions the *API only*. See README -> "Deployment"
+# for the database and frontend steps, including the verified free-tier status
+# of each service.
+# ---------------------------------------------------------------------------
+
+services:
+  - type: web
+    name: connectmeet-api
+    runtime: python
+    plan: free
+    # Repo root is the Render root, so the app lives in ./backend
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Gunicorn reads $PORT from Render; do not hardcode a port.
+    startCommand: gunicorn --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT wsgi:app
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    envVars:
+      - key: FLASK_ENV
+        value: production
+
+      # --- Secrets: generate your own, then paste the values in the Render UI.
+      # They are marked sync:false so they are never read from this file.
+      - key: SECRET_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+
+      - key: JWT_ACCESS_TOKEN_EXPIRES_HOURS
+        value: "12"
+
+      # --- Database.
+      # Render's free plan provides PostgreSQL only. This app is MySQL.
+      # Paste the MySQL connection string from your chosen host (see README).
+      - key: DATABASE_URL
+        sync: false
+
+      # --- CORS: the deployed frontend origin, e.g. https://connectmeet.vercel.app
+      - key: FRONTEND_URL
+        sync: false
+      - key: EXTRA_CORS_ORIGINS
+        value: ""
+
+      # --- Agora: same project you use locally. Values come from the Render UI.
+      - key: AGORA_APP_ID
+        sync: false
+      - key: AGORA_APP_CERTIFICATE
+        sync: false
+      - key: AGORA_RTC_TOKEN_TTL
+        value: "3600"
+      - key: AGORA_RTM_TOKEN_TTL
+        value: "3600"

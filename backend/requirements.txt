@@ -1,0 +1,12 @@
+# ConnectMeet backend dependencies
+Flask>=3.0,<4
+Werkzeug>=3.0,<4
+flask-cors>=5.0
+flask-jwt-extended>=4.7
+flask-sqlalchemy>=3.1
+flask-migrate>=4.0
+SQLAlchemy>=2.0
+PyMySQL>=1.1
+cryptography>=42
+python-dotenv>=1.0
+gunicorn>=23.0
