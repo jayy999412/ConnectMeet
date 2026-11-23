@@ -4,11 +4,14 @@ import { KeyRound, LogIn, Search } from 'lucide-react';
 import { meetingService } from '../services/meetingService.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { normalizeMeetingCode } from '../utils/meetingCode.js';
 
 /**
  * Join page. Accepts ?code=ABCDE-FGHIJ from an invite link, resolves it to a
  * meeting, validates the optional password and enters the room only after the
  * backend has registered the participant and issued an Agora token.
+ *
+ * The Meeting ID field accepts a bare code OR a pasted invite link.
  */
 export default function JoinMeeting() {
   const [params] = useSearchParams();
@@ -16,14 +19,18 @@ export default function JoinMeeting() {
   const toast = useToast();
   const { user } = useAuth();
 
-  const [form, setForm] = useState({ code: params.get('code') || '', password: '' });
+  const [form, setForm] = useState({
+    code: normalizeMeetingCode(params.get('code') || ''),
+    password: '',
+  });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [resolving, setResolving] = useState(Boolean(params.get('code')));
 
   // Pre-resolve an invite link so the user sees the meeting before entering.
   useEffect(() => {
-    const code = params.get('code');
+    const raw = params.get('code');
+    const code = normalizeMeetingCode(raw || '');
     if (!code) return;
     let alive = true;
     meetingService
@@ -45,14 +52,16 @@ export default function JoinMeeting() {
   const onSubmit = async (e) => {
     e.preventDefault();
     const next = {};
-    if (!form.code.trim()) next.code = 'Enter a meeting ID.';
+    // Accept "paste the invite link" as well as a bare code.
+    const code = normalizeMeetingCode(form.code);
+    if (!code) next.code = 'Enter a meeting ID.';
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setSubmitting(true);
     try {
       // Step 1: resolve the human-friendly code to the numeric meeting id.
-      const resolved = await meetingService.resolve(form.code.trim().toUpperCase());
+      const resolved = await meetingService.resolve(code);
       const meetingId = resolved.meeting.id;
 
       // Step 2: join — validates password/status and records the participant.
