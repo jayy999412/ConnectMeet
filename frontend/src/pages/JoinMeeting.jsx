@@ -1,33 +1,40 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { KeyRound, LogIn, Search } from 'lucide-react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { KeyRound, LogIn, Search, UserRound } from 'lucide-react';
 import { meetingService } from '../services/meetingService.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { normalizeMeetingCode } from '../utils/meetingCode.js';
+import { nextQuery } from '../utils/navigation.js';
+import { PageLoader } from '../components/Loader.jsx';
 
 /**
- * Join page. Accepts ?code=ABCDE-FGHIJ from an invite link, resolves it to a
- * meeting, validates the optional password and enters the room only after the
- * backend has registered the participant and issued an Agora token.
+ * Join page — the destination of every invite link.
+ *
+ * Public by design: a recipient with no account must land here, type a name
+ * and be in the meeting. Signed-in users skip the name field and join as
+ * themselves. Both paths converge on the same backend rules (password,
+ * status, host removals) and the same Agora token flow.
  *
  * The Meeting ID field accepts a bare code OR a pasted invite link.
  */
 export default function JoinMeeting() {
   const [params] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, booting, adoptSession } = useAuth();
 
   const [form, setForm] = useState({
     code: normalizeMeetingCode(params.get('code') || ''),
     password: '',
   });
+  const [name, setName] = useState('');
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [resolving, setResolving] = useState(Boolean(params.get('code')));
 
-  // Pre-resolve an invite link so the user sees the meeting before entering.
+  // Pre-resolve an invite link so the visitor sees the meeting before entering.
   useEffect(() => {
     const raw = params.get('code');
     const code = normalizeMeetingCode(raw || '');
@@ -49,12 +56,27 @@ export default function JoinMeeting() {
     };
   }, [params, toast]);
 
+  // A returning guest may already hold a token; wait for session restore so we
+  // don't flash the name field at someone who is effectively signed in.
+  if (booting) {
+    return (
+      <div className="mx-auto max-w-xl">
+        <PageLoader />
+      </div>
+    );
+  }
+
   const onSubmit = async (e) => {
     e.preventDefault();
     const next = {};
     // Accept "paste the invite link" as well as a bare code.
     const code = normalizeMeetingCode(form.code);
     if (!code) next.code = 'Enter a meeting ID.';
+    // Guests only supply the display name everyone will see in the meeting.
+    const displayName = name.trim();
+    if (!user && (displayName.length < 2 || displayName.length > 60)) {
+      next.name = 'Enter your name (2-60 characters) to join.';
+    }
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -64,8 +86,19 @@ export default function JoinMeeting() {
       const resolved = await meetingService.resolve(code);
       const meetingId = resolved.meeting.id;
 
-      // Step 2: join — validates password/status and records the participant.
-      await meetingService.join(meetingId, { password: form.password });
+      if (user) {
+        // Signed in: validate password/status and record the participant.
+        await meetingService.join(meetingId, { password: form.password });
+      } else {
+        // No account: one call creates the guest identity, records the
+        // participant and returns a session token — then we are "signed in"
+        // as that guest for the rest of the visit.
+        const data = await meetingService.guestJoin(meetingId, {
+          name: displayName,
+          password: form.password,
+        });
+        adoptSession(data.token, data.user);
+      }
 
       toast.success(`Joining ${resolved.meeting.title}…`);
       navigate(`/room/${meetingId}`, { replace: true });
@@ -79,7 +112,7 @@ export default function JoinMeeting() {
   };
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-xl px-4 py-10 sm:py-14">
       <header className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Join a meeting</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -91,6 +124,35 @@ export default function JoinMeeting() {
         {errors.api && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {errors.api}
+          </div>
+        )}
+
+        {!user && (
+          <div>
+            <label className="label" htmlFor="guest-name">Your name</label>
+            <div className="relative">
+              <UserRound size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                id="guest-name"
+                className="input pl-10"
+                placeholder="The name others will see"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setErrors({});
+                }}
+                maxLength={60}
+                autoComplete="name"
+                aria-invalid={Boolean(errors.name)}
+              />
+            </div>
+            {errors.name ? (
+              <p className="mt-1.5 text-xs text-rose-600">{errors.name}</p>
+            ) : (
+              <p className="mt-1.5 text-xs text-slate-400">
+                No account needed — just type your name and join.
+              </p>
+            )}
           </div>
         )}
 
@@ -135,8 +197,9 @@ export default function JoinMeeting() {
         </div>
 
         <div className="rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-          Joining as <span className="font-semibold text-slate-700">{user?.name}</span>. Camera and
-          microphone access will be requested when you enter the room.
+          Joining as{' '}
+          <span className="font-semibold text-slate-700">{user?.name || name.trim() || 'Guest'}</span>
+          . Camera and microphone access will be requested when you enter the room.
         </div>
 
         <button type="submit" className="btn-primary w-full py-3" disabled={submitting}>
@@ -146,14 +209,36 @@ export default function JoinMeeting() {
       </form>
 
       <p className="mt-5 text-center text-sm text-slate-500">
-        Don&apos;t have a meeting ID?{' '}
-        <button
-          type="button"
-          onClick={() => navigate('/meetings/new')}
-          className="font-semibold text-brand-600 hover:text-brand-700"
-        >
-          Create one instead
-        </button>
+        {user ? (
+          <>
+            Don&apos;t have a meeting ID?{' '}
+            <button
+              type="button"
+              onClick={() => navigate('/meetings/new')}
+              className="font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Create one instead
+            </button>
+          </>
+        ) : (
+          <>
+            Prefer your own account?{' '}
+            <a
+              href={`/login${nextQuery(`${location.pathname}${location.search}`)}`}
+              className="font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Log in
+            </a>
+            {' · '}
+            <button
+              type="button"
+              onClick={() => navigate('/register')}
+              className="font-semibold text-brand-600 hover:text-brand-700"
+            >
+              Sign up
+            </button>
+          </>
+        )}
       </p>
     </div>
   );

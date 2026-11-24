@@ -52,6 +52,16 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  /**
+   * Adopt a session the backend just issued without a /me round trip.
+   * Used by guest join: the server creates the identity and returns its token
+   * in the same response, so the visitor can enter the meeting immediately.
+   */
+  const adoptSession = useCallback((token, nextUser) => {
+    setToken(token);
+    setUser(nextUser);
+  }, []);
+
   const updateUser = useCallback((patch) => {
     setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
@@ -65,9 +75,10 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      adoptSession,
       updateUser,
     }),
-    [user, booting, login, register, logout, updateUser]
+    [user, booting, login, register, logout, adoptSession, updateUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

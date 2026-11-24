@@ -90,6 +90,11 @@ export default function ParticipantPanel({
                       'Participant'
                     )}
                   </span>
+                  {p.is_guest && (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-500">
+                      Guest
+                    </span>
+                  )}
                   <span>· joined {time(p.joined_at)}</span>
                 </p>
               </div>

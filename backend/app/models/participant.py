@@ -48,6 +48,9 @@ class Participant(db.Model):
             "name": self.user.name if self.user else "Participant",
             "role": self.role,
             "status": self.status,
+            # Lets the UI mark one-off guests so hosts can tell them apart
+            # from registered members.
+            "is_guest": bool(self.user.is_guest) if self.user else False,
             "joined_at": self.joined_at.isoformat() if self.joined_at else None,
             "left_at": self.left_at.isoformat() if self.left_at else None,
         }

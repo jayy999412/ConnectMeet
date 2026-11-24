@@ -1,5 +1,7 @@
 """Meeting routes — creation, discovery, joining, leaving, ending, history."""
 
+import secrets
+
 from flask import Blueprint, current_app, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -8,6 +10,7 @@ from ..models import Meeting, Participant, Recording, User, STATUS_ACTIVE
 from ..services import meeting_service as svc
 from ..utils.decorators import json_payload, rate_limit
 from ..utils.responses import err, ok
+from ..utils.tokens import issue_token
 from ..utils.validators import validate_meeting
 
 meetings_bp = Blueprint("meetings", __name__, url_prefix="/api/meetings")
@@ -77,10 +80,15 @@ def history():
 
 # ------------------------------------------------------------ resolve by code
 @meetings_bp.get("/code/<string:code>")
-@jwt_required()
+@rate_limit(max_requests=30, window_seconds=60, key_prefix="resolve")
 def resolve(code: str):
-    """Invite links carry the human-friendly code; the room uses the numeric id."""
-    current_user()
+    """Invite links carry the human-friendly code; the room uses the numeric id.
+
+    Public on purpose: the join page must show the meeting to a visitor who has
+    no account yet. Only non-sensitive fields are returned (no host email, no
+    password hash) and the endpoint is rate-limited so codes cannot be
+    enumerated at any useful pace.
+    """
     meeting = svc.resolve_code(code)
     return ok(
         {
@@ -124,6 +132,68 @@ def join(meeting_id: int):
             "you": {"role": participant.role, "status": participant.status},
             "participants": svc.serialize_participants(meeting),
         },
+        message="Joined the meeting.",
+    )
+
+
+# --------------------------------------------------------------- guest join
+@meetings_bp.post("/<int:meeting_id>/guest-join")
+@rate_limit(max_requests=20, window_seconds=60, key_prefix="guest_join")
+def guest_join(meeting_id: int):
+    """Join with a display name only — no account, no email, no signup wall.
+
+    This is the Zoom-style flow invite links need: the recipient types the name
+    everyone will see and is in the room. A throwaway `is_guest` user row is
+    created so every existing rule keeps working unchanged — participants FK,
+    host-only permissions, Agora uid == user id, chat ownership.
+
+    The guest never learns the random password that is generated for the row,
+    so the account cannot be taken over later.
+    """
+    payload = json_payload()
+    name = str(payload.get("name") or "").strip()
+    if not 2 <= len(name) <= 60:
+        return err(
+            "Please enter your name to join.",
+            422,
+            {"name": "Enter a name (2-60 characters)."},
+        )
+
+    # Resolves (404) before any account is created.
+    meeting = svc.get_meeting(meeting_id)
+
+    guest = User(
+        name=name,
+        email=f"guest-{secrets.token_hex(8)}@connectmeet.invalid",
+        is_guest=True,
+    )
+    guest.set_password(secrets.token_urlsafe(24))  # random; never disclosed
+    db.session.add(guest)
+    try:
+        # Allocate the guest id so join_meeting can satisfy the participants FK.
+        db.session.flush()
+        participant = svc.join_meeting(meeting, guest, payload.get("password"))
+    except Exception:
+        # Wrong password / ended / removed: never leave an orphaned guest row.
+        db.session.rollback()
+        raise
+
+    current_app.logger.info(
+        "meeting.guest_join meeting=%s guest=%s role=%s",
+        meeting.id,
+        guest.id,
+        participant.role,
+    )
+    return ok(
+        {
+            "token": issue_token(guest),
+            "user": guest.to_dict(),
+            "meeting": meeting.to_dict(),
+            "participant": participant.to_dict(),
+            "you": {"role": participant.role, "status": participant.status},
+            "participants": svc.serialize_participants(meeting),
+        },
+        201,
         message="Joined the meeting.",
     )
 

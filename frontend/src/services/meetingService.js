@@ -22,6 +22,16 @@ export const meetingService = {
     return data;
   },
 
+  /**
+   * Guest entry: join with a display name only — no account required.
+   * Returns `{ token, user, meeting, participant, ... }`; the caller adopts the
+   * token so every subsequent request is authenticated as that guest.
+   */
+  async guestJoin(id, { name, password } = {}) {
+    const { data } = await api.post(`/meetings/${id}/guest-join`, { name, password });
+    return data;
+  },
+
   async leave(id) {
     const { data } = await api.post(`/meetings/${id}/leave`);
     return data;

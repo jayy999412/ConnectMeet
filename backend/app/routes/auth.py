@@ -1,10 +1,7 @@
 """Authentication routes: register, login, current user, logout."""
 
-from datetime import timedelta
-
 from flask import Blueprint, current_app
 from flask_jwt_extended import (
-    create_access_token,
     get_jwt_identity,
     jwt_required,
 )
@@ -13,14 +10,10 @@ from ..extensions import db
 from ..models import User
 from ..utils.decorators import json_payload, rate_limit
 from ..utils.responses import err, ok
+from ..utils.tokens import issue_token
 from ..utils.validators import validate_login, validate_registration
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
-
-
-def _issue_token(user: User) -> str:
-    expires = timedelta(hours=int(current_app.config.get("JWT_ACCESS_TOKEN_EXPIRES_HOURS", "12")))
-    return create_access_token(identity=str(user.id), expires_delta=expires)
 
 
 @auth_bp.post("/register")
@@ -43,7 +36,7 @@ def register():
 
     current_app.logger.info("user.registered user_id=%s email=%s", user.id, email)
     return ok(
-        {"token": _issue_token(user), "user": user.to_dict()},
+        {"token": issue_token(user), "user": user.to_dict()},
         201,
         message="Account created successfully.",
     )
@@ -66,7 +59,7 @@ def login():
         return err("Invalid email address or password.", 401)
 
     current_app.logger.info("auth.login user_id=%s", user.id)
-    return ok({"token": _issue_token(user), "user": user.to_dict()}, message="Logged in successfully.")
+    return ok({"token": issue_token(user), "user": user.to_dict()}, message="Logged in successfully.")
 
 
 @auth_bp.get("/me")

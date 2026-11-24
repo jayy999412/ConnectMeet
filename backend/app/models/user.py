@@ -19,6 +19,11 @@ class User(db.Model):
     email = db.Column(db.String(255), nullable=False, unique=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     profile_image = db.Column(db.String(512), nullable=True)
+    # True for throwaway identities created by the guest-join flow: the visitor
+    # supplied only a display name to enter a meeting — never an email or a
+    # password they chose. Kept as a real column so hosts can tell registered
+    # members apart from one-off guests.
+    is_guest = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -41,6 +46,7 @@ class User(db.Model):
             "id": self.id,
             "name": self.name,
             "profile_image": self.profile_image,
+            "is_guest": bool(self.is_guest),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

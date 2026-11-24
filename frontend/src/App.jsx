@@ -27,6 +27,9 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         </Route>
         <Route path="/" element={<LandingPage />} />
+        {/* Public on purpose: invite links must open for people with no
+            account. The page itself handles both guests and signed-in users. */}
+        <Route path="/join" element={<JoinMeeting />} />
       </Route>
 
       {/* Authenticated app shell */}
@@ -39,7 +42,6 @@ export default function App() {
       >
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/meetings/new" element={<CreateMeeting />} />
-        <Route path="/join" element={<JoinMeeting />} />
         <Route path="/meetings/history" element={<MeetingHistory />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
