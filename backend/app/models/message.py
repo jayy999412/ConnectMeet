@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from ..extensions import db
+from ..utils.timefmt import iso_utc
 
 
 def utcnow() -> datetime:
@@ -34,7 +35,7 @@ class Message(db.Model):
             "sender_id": self.sender_id,
             "sender_name": self.sender.name if self.sender else "Participant",
             "message": self.message,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": iso_utc(self.created_at),
         }
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper

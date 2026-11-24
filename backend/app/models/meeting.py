@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from ..extensions import db
+from ..utils.timefmt import iso_utc
 
 # meeting.status lifecycle
 STATUS_WAITING = "waiting"  # created, nobody has joined yet
@@ -66,10 +67,10 @@ class Meeting(db.Model):
             "host_id": self.host_id,
             "status": self.status,
             "has_password": self.has_password,
-            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "scheduled_at": iso_utc(self.scheduled_at),
+            "created_at": iso_utc(self.created_at),
+            "started_at": iso_utc(self.started_at),
+            "ended_at": iso_utc(self.ended_at),
         }
         if include_host:
             data["host_name"] = self.host.name if self.host else None

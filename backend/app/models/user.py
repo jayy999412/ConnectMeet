@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..extensions import db
+from ..utils.timefmt import iso_utc
 
 
 def utcnow() -> datetime:
@@ -47,8 +48,8 @@ class User(db.Model):
             "name": self.name,
             "profile_image": self.profile_image,
             "is_guest": bool(self.is_guest),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
         }
         if include_email:
             data["email"] = self.email

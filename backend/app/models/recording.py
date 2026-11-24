@@ -11,6 +11,7 @@ the browser MediaRecorder API and saved on the participant's own device.
 from datetime import datetime, timezone
 
 from ..extensions import db
+from ..utils.timefmt import iso_utc
 
 STATUS_LOCAL = "local_device"
 STATUS_FAILED = "failed"
@@ -41,8 +42,8 @@ class Recording(db.Model):
             "meeting_id": self.meeting_id,
             "recording_url": self.recording_url,
             "status": self.status,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+            "started_at": iso_utc(self.started_at),
+            "ended_at": iso_utc(self.ended_at),
         }
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper

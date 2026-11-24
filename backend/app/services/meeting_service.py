@@ -27,6 +27,7 @@ from ..models import (
     STATUS_LIVE,
     STATUS_WAITING,
 )
+from ..utils.timefmt import iso_utc
 
 DEFAULT_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I ambiguity
 
@@ -148,9 +149,17 @@ def join_meeting(meeting: Meeting, user: User, password: str | None) -> Particip
     if meeting.status == STATUS_ENDED:
         raise MeetingError("This meeting has ended. Ask the host to start a new one.", 410)
 
-    if meeting.scheduled_at and meeting.scheduled_at > utcnow():
-        local = meeting.scheduled_at.strftime("%d %b %Y, %H:%M UTC")
-        raise MeetingError(f"This meeting is scheduled for {local} and has not started yet.", 409)
+    if meeting.scheduled_at:
+        # scheduled_at is stored as naive UTC by MySQL; normalize both sides
+        # to naive UTC so this comparison can never raise TypeError.
+        scheduled = (
+            meeting.scheduled_at.replace(tzinfo=None)
+            if meeting.scheduled_at.tzinfo
+            else meeting.scheduled_at
+        )
+        if scheduled > utcnow().replace(tzinfo=None):
+            local = scheduled.strftime("%d %b %Y, %H:%M UTC")
+            raise MeetingError(f"This meeting is scheduled for {local} and has not started yet.", 409)
 
     if meeting.has_password:
         existing = get_participant(meeting, user)
@@ -287,11 +296,11 @@ def meeting_history(user: User) -> list[dict]:
             "role": row.role,
             "host_name": row.meeting.host.name if row.meeting.host else "Unknown",
             "meeting_status": row.meeting.status,
-            "created_at": row.meeting.created_at.isoformat(),
-            "started_at": row.meeting.started_at.isoformat() if row.meeting.started_at else None,
-            "ended_at": row.meeting.ended_at.isoformat() if row.meeting.ended_at else None,
-            "joined_at": row.joined_at.isoformat() if row.joined_at else None,
-            "left_at": row.left_at.isoformat() if row.left_at else None,
+            "created_at": iso_utc(row.meeting.created_at),
+            "started_at": iso_utc(row.meeting.started_at),
+            "ended_at": iso_utc(row.meeting.ended_at),
+            "joined_at": iso_utc(row.joined_at),
+            "left_at": iso_utc(row.left_at),
             "participant_status": row.status,
         }
         for row in rows
@@ -363,8 +372,8 @@ def dashboard_lists(user: User, limit: int = 5) -> dict:
             "title": meeting.title,
             "status": meeting.status,
             "role": ROLE_HOST,
-            "scheduled_at": meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
-            "created_at": meeting.created_at.isoformat(),
+            "scheduled_at": iso_utc(meeting.scheduled_at),
+            "created_at": iso_utc(meeting.created_at),
         }
 
     def _recent(row: Participant) -> dict:
@@ -374,8 +383,8 @@ def dashboard_lists(user: User, limit: int = 5) -> dict:
             "title": row.meeting.title,
             "status": row.meeting.status,
             "role": row.role,
-            "scheduled_at": row.meeting.scheduled_at.isoformat() if row.meeting.scheduled_at else None,
-            "created_at": row.meeting.created_at.isoformat(),
+            "scheduled_at": iso_utc(row.meeting.scheduled_at),
+            "created_at": iso_utc(row.meeting.created_at),
         }
 
     return {

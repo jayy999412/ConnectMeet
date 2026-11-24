@@ -10,6 +10,7 @@ from ..models import Meeting, Participant, Recording, User, STATUS_ACTIVE
 from ..services import meeting_service as svc
 from ..utils.decorators import json_payload, rate_limit
 from ..utils.responses import err, ok
+from ..utils.timefmt import iso_utc
 from ..utils.tokens import issue_token
 from ..utils.validators import validate_meeting
 
@@ -98,7 +99,7 @@ def resolve(code: str):
                 "title": meeting.title,
                 "status": meeting.status,
                 "has_password": meeting.has_password,
-                "scheduled_at": meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
+                "scheduled_at": iso_utc(meeting.scheduled_at),
             }
         }
     )

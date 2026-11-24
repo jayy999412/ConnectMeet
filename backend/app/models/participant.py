@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from ..extensions import db
+from ..utils.timefmt import iso_utc
 
 ROLE_HOST = "host"
 ROLE_PARTICIPANT = "participant"
@@ -51,8 +52,8 @@ class Participant(db.Model):
             # Lets the UI mark one-off guests so hosts can tell them apart
             # from registered members.
             "is_guest": bool(self.user.is_guest) if self.user else False,
-            "joined_at": self.joined_at.isoformat() if self.joined_at else None,
-            "left_at": self.left_at.isoformat() if self.left_at else None,
+            "joined_at": iso_utc(self.joined_at),
+            "left_at": iso_utc(self.left_at),
         }
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
