@@ -47,7 +47,10 @@ class BaseConfig:
             "pool_pre_ping": True,
             "pool_recycle": 280,
             "pool_timeout": 10,
-            "max_overflow": 5,
+            # Cheap hosts cap concurrent connections (Clever Cloud DEV = 5),
+            # so pool sizes are tunable per environment.
+            "pool_size": int(os.getenv("DB_POOL_SIZE", "5")),
+            "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "5")),
         }
         if DATABASE_URL.startswith(("mysql", "mariadb"))
         else {}
